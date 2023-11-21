@@ -1,0 +1,134 @@
+---
+title: "SARS-CoV-2 plots - Italian outbreak"
+author: "Andrea Silverj"
+date: '2021-05-01'
+output: html_document
+---
+
+# -----[Data visualization using ggtree]-----
+
+Set working directory and load libraries:
+```{r message=FALSE, warning=FALSE}
+setwd("mywd") # Specify your working directory
+library("ggplot2")
+library("tidyverse")
+library("ggtree")
+library("ips")
+library("treeio")
+library("tpltheme")
+library("tidytree")
+library("ggimage")
+library("ggnewscale")
+```
+
+Load tree data in a phylo object and create a data frame for data mapping:
+```{r}
+sc2tree <- read.beast("sc2_ita_outbreak_284hqmasked_rcombined.tre")
+sc2tree_tib <- as_tibble(sc2tree)
+sc2tree_df <- as.data.frame(sc2tree_tib)
+
+sc2tree_df_annp1 <- sc2tree_df %>% separate(label, into=c("itf","place","id","clade","lineage","date"), sep="[|]", remove=FALSE)
+
+sc2tree_df_annp2 <- sc2tree_df_annp1 %>% separate(id, into=c("batch","run","code"), sep="[_]", remove=FALSE)
+
+#sc2tree_df_annp3 <- sc2tree_df_annp2 %>% mutate(wave=ifelse(as.Date(date)<as.Date("2020/08/01"),"first","second"))
+
+sc2tree_df_annp3 <- sc2tree_df_annp2 %>% mutate(posteriorsupport=ifelse(posterior > 0.5 & posterior < 0.8, "medium", ifelse(posterior >= 0.8, "high","low")))
+
+sc2tree_df_annp4 <-  sc2tree_df_annp3 %>% mutate(lineagemut=(fct_lump_min(sc2tree_df_annp3$lineage, 3, w = NULL, other_level = "Other")))
+
+sc2tree_df_annp5 <- sc2tree_df_annp4 %>% mutate(lineagemut2=(recode(lineagemut, B.1.1.130="Other", B.1.1.145="Other", B.1.1.39="Other", B.1.1.67="Other", B.1.134="Other", B.1.221="Other", B.1.236="Other", B.1.258="Other", B.1.258.3="Other", B.1.356="Other", B.1.438="Other", B="Other", B.1.9.5="Other")))
+
+sc2tree_df_annp6 <- sc2tree_df_annp5 %>% mutate(nextclademut=(recode(clade, "20H/501Y.V2"="Other", "20I/501Y.V1"="Other", "20J/501Y.V3"="Other", "19A"="Other", "19B"="Other")))
+
+# Without highlighting the second outbreak in Rome
+sc2tree_df_ann <- sc2tree_df_annp6 %>% mutate(itfl = case_when(itf == "IT" & place == "Lombardy" ~ "LO", itf=="NI" ~ "NI", itf=="IT" & place!= "Lombardy" ~ "IT", itf == "TN" ~ "TN"))
+
+# Highlight the outbreak in Rome
+#sc2tree_df_ann <- sc2tree_df_annp6 %>% mutate(itfl = case_when(itf == "IT" & place == "Lombardy" ~ "LO", itf=="NI" ~ "NI", itf=="IT" & place!= "Lombardy" ~ "IT", itf == "TN" ~ "TN", id == "EPI_ISL_451298" ~ "RO", id == "EPI_ISL_451300" ~ "RO", id == "EPI_ISL_410545" ~ "RO", id == "EPI_ISL_451299" ~ "RO", id == "EPI_ISL_451301" ~ "RO", id == "EPI_ISL_451302" ~ "RO", id == "EPI_ISL_412974" ~ "RO", id == "EPI_ISL_410546" ~ "RO"))
+
+# Remove intermediate datasets
+remove(sc2tree_tib)
+remove(sc2tree_df_annp1)
+remove(sc2tree_df_annp2)
+remove(sc2tree_df_annp3)
+remove(sc2tree_df_annp4)
+remove(sc2tree_df_annp5)
+remove(sc2tree_df_annp6)
+remove(sc2tree_df)
+```
+
+Create a table for gheatmap
+```{r}
+# Run these commands only once
+# Recoded lineagemut2
+pangolineages_ord_rec2 <- sc2tree_df_ann %>% select(label, lineagemut2)
+write.table(pangolineages_ord_rec2, file="itout_pangolineages_ord_rec2.txt", sep = "\t", row.names = FALSE)
+
+# Recoded nextclade
+nextclade_ord_rec <- sc2tree_df_ann %>% select(label, nextclademut)
+write.table(nextclade_ord_rec, file="itout_nextclade_ord_rec.txt", sep = "\t", row.names = FALSE)
+
+remove(pangolineages_ord_rec2)
+remove(nextclade_ord_rec)
+
+# After you obtained your .txt, you need to slightly modifications before using them in the following steps. Remove all the NA and the " characters using bash.
+```
+
+
+# Main tree
+```{r}
+# Set colours (without Rome)
+color_waves2=c(TN="red", IT="black", NI="darkviolet", LO="forestgreen", medium="gray47", low="transparent", high="black")
+remove(color_waves2)
+
+# Set colours (with Rome)
+color_waves2=c(TN="red", IT="black", NI="#785EF0", LO="forestgreen", RO="#FE6100", medium="gray47", low="transparent", high="black")
+remove(color_waves2)
+
+# Tree object
+sc2_tree_plot2 <- ggtree(sc2tree, mrsd="2020-05-30", aes(color=sc2tree_df_ann$itfl))+theme_tree2()+theme(legend.position="right")+ggtitle("SARS-CoV-2 timetree")+scale_color_manual(values=color_waves2, na.value="#000000")+geom_nodepoint(aes(color=sc2tree_df_ann$posteriorsupport))
+
+sc2_tree_plot2 <- ggtree(sc2tree, mrsd="2020-05-30", aes(color=sc2tree_df_ann$place))+theme_tree2()+theme(legend.position="right")+ggtitle("SARS-CoV-2 timetree")+geom_nodepoint(aes(color=sc2tree_df_ann$posteriorsupport))
+
+```
+
+# Load Nextclade and Pangolin classification
+```{r}
+# Pangolin
+pangolineages_tab_rec2 <- read.table(file="pangolineages_ord_rec2.txt", sep="\t", stringsAsFactor=F)
+
+# Nextclade
+nextclade_tab_rec <- read.table(file="nextclade_ord_rec.txt", sep="\t", stringsAsFactor=F)
+```
+
+# Map Nextclade and Pangolin classifications on the tree
+```{r}
+annotated_tree2 <- gheatmap(sc2_tree_plot2, pangolineages_tab_rec2, offset=.11, width=.05, colnames=TRUE)+scale_fill_manual(breaks=c("B.1", "B.1.1", "B.1.1.1", "B.1.1.29", "B.1.160", "B.1.177", "B.1.1.305", "B.1.367", "Other"), values=c("#A6CEE3", "#2078B4", "#B2DF8A", "#359F2C", "#FB9A99", "#E31A1D", "#FDBF6F", "#FF7F01", "dark gray"), name="Lineage")
+
+annotated_tree2_fill <- annotated_tree2+new_scale_fill()
+
+annotated_tree_nclade2 <- gheatmap(annotated_tree2_fill, nextclade_tab_rec, offset=.03, width=.05, colnames=TRUE)+scale_fill_manual(breaks=c("20A", "20A.EU2", "20B", "20C", "20D", "20E (EU1)", "Other"), values=c("#80C97F", "#BEAED4", "#FDC086", "#FFFF9A", "#386CB0", "#F0007F", "dark gray"), name="Clade")+guides(color = guide_legend(order=1), fill= guide_legend(order=2))
+```
+
+# Export the figure
+```{r}
+ggsave("figure_tree_article_sc2itaout.pdf", plot=annotated_tree_nclade2,height=8.5 ,width=7)
+sc2_tree_plot2
+
+ggsave("figure_tree_article_sc2itaout.pdf", plot=sc2_tree_plot2, height=8.5 ,width=7)
+```
+
+# Get node numbers
+```{r}
+node_nums <- ggtree(sc2tree) + geom_text(aes(label=node), hjust=-.3)
+
+ggsave("node_numbers.pdf", plot=node_nums, height=10 ,width=7)
+
+sc2_tree_plot2_hHPD95 <- ggtree(sc2tree, mrsd="2020-05-30", aes(color=sc2tree_df_ann$itfl))+theme_tree2()+theme(legend.position="right")+ggtitle("SARS-CoV-2 timetree")+scale_color_manual(values=color_waves2, na.value="#000000")+geom_nodepoint(aes(color=sc2tree_df_ann$posteriorsupport))+geom_range(range='height_0.95_HPD', color='red', alpha=.6, size=2)
+options(max.print=999999)
+HPD95data_data1 <- ggplot_build(sc2_tree_plot2)
+my_log <- file("my_log.txt")
+sink(my_log, append = TRUE, type = "output")
+HPD95data_data2 <- ggplot_build(sc2_tree_plot2_hHPD95)
+```

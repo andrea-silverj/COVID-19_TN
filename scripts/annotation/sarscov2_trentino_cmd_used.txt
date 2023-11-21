@@ -1,0 +1,34 @@
+Format_ids_from_GISAID_information
+awk -F $'\t' '{print $2,$4$3}' gisaid_hcov-19_2020_07_17_09.tsv | sed 's/-/\//g' | sed 1d | sed 's/2020\//@2020\//g' | sed 's/ Europe \///g' | sed 's/ Italy \/ /_Italy_/g' | sed 's/ \/ /_/g' | sed 's/ /_/g' | sed 's/_Italy_/|Italy\//g'> ids_gisaid_ita.txt
+
+Format_ids_from_Trentine_information
+Dates
+awk -F $'\t' '{print $5}' Campioni_Barcode_RUN.tsv | sed '1d;2d;3d' | awk -F $'/' '{print 2020,$2,"0"$1}' | sed 's/ 3 /\/03\//g' > ids_trentine_ita_dates.txt
+
+Other information
+awk -F $'\t' '{print $3"__",$8"@"}' Campioni_Barcode_RUN.tsv | sed 's/Soppresso -//g' | sed '1d;2d;3d' | sed 's/ /_/g' | sed 's/__/|Trentino\//g' | sed 's/\/_/\//g' > ids_trentine_ita_places.txt
+
+paste -d"|" ids_trentine_ita_places.txt ids_trentine_ita_dates.txt | sed 's/@|/@/g' > ids_trentine_ita.txt
+
+
+#Extract information from .json
+hjson -j ncov_global_2020-07-27_21-18.json | jq '..|objects|select(.gisaid_epi_isl)| .gisaid_epi_isl, .region, .subclade_membership' | grep "value" > results_inf.txt
+
+hjson -j ncov_global_2020-07-27_21-18.json | jq '..|objects|select(.gisaid_epi_isl)| .gisaid_epi_isl, .region, .subclade_membership, .country, .host' | grep "value" > results_inf2.txt
+
+Format_ids_from_Trentine_information_NEW
+Dates
+grep -v "nr" Campioni_Barcode_RUN.tsv | awk -F $'\t' '{print $5}' | sed '1d;2d;3d' | awk -F $'/' '{print 2020,$2,"0"$1}' | sed 's/ 3 /\/03\//g' > ids_trentine_ita_dates.txt
+
+Other information
+awk -F $'\t' '{print $3"__",$8"@"}' Campioni_Barcode_RUN.tsv | grep -v "nr" | sed 's/Soppresso -//g' | sed '1d;2d;3d' | sed 's/ /_/g' | sed 's/__/|Trentino\//g' | sed 's/\/_/\//g' > ids_trentine_ita_places.txt
+
+awk -F $'\t' '{print $3"__",$8"@"}' Campioni_Barcode_RUN.tsv | sed '1d;2d;3d' | grep -v "nr" | sed 's/Soppresso -//g' | sed 's/ /_/g' | sed 's/__/|Trentino\//g' | sed 's/\/_/\//g' > ids_trentine_ita_places.txt
+
+grep -v "nr" Campioni_Barcode_RUN.tsv | sed '1d;2d;3d' | awk -F $'\t' '{print $2$3"-"$4"|"}'| sed 's/RUN/R/g'| less
+
+awk -F $'\t' '{print $3"__",$8$9"@"}' Campioni_Barcode_RUN.tsv | grep -v "nr" | sed 's/Soppresso -//g' | sed '1d;2d;3d' | sed 's/ /_/g' | sed 's/__/|TN\//g' | sed 's/\/_/\//g' | cut -d "|" -f2 | sed 's/_//g'| sed "s/'//g" | sed -e "s/(//g" -e "s/)//g" | less
+
+grep -v "nr" Campioni_Barcode_RUN.tsv | sed '1d;2d;3d' | awk -F $'\t' '{print $2$3"-"$4"_"$6}'| sed 's/RUN/R/g'| sed 's/CAVALESE /CV/g' | sed 's/TRENTO /TN/g' | sed 's/ROVERETO /RO/g'| sed 's/TIONE /TI/g' | sed 's/CLES /CL/g' | sed 's/ARCO /AR/g' | sed 's/BORGO /BO/g' | sed -e 's/_TNEMA/_TNEM/g' -e 's/_TNCRPE/_TNCR/g' -e 's/_TNGER/_TNGE/g' -e 's/_CLMED/_CLME/g' -e 's/_RORIA/_RORI/g' -e 's/_CVDOMI/_CVDO/g'
+
+paste -d"|" ids_first_part.txt ids_trentine_ita_dates2.txt | sed 's/@|/@/g' > ids_trentine_ita2.txt

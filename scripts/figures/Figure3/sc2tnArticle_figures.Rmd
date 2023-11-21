@@ -1,0 +1,108 @@
+---
+title: "SARS-CoV-2 plots"
+author: "Andrea Silverj"
+date: '2021-04-22'
+output: html_document
+---
+
+# -----[Data visualization using ggtree]-----
+
+Set working directory and load libraries:
+```{r message=FALSE, warning=FALSE}
+setwd("mywd") # Set the working directory here
+library("ggplot2")
+library("tidyverse")
+library("ggtree")
+library("ips")
+library("treeio")
+library("tpltheme")
+library("tidytree")
+library("ggimage")
+library("ggnewscale")
+```
+
+Load tree data in a phylo object and create a data frame for data mapping:
+```{r}
+sc2tree <- read.beast("alltn_randomgisaid_386masked_ccrp_rcombined.tre")
+sc2tree_tib <- as_tibble(sc2tree)
+sc2tree_df <- as.data.frame(sc2tree_tib)
+
+sc2tree_df_annp1 <- sc2tree_df %>% separate(label, into=c("place","id","lineage","date"), sep="[|]", remove=FALSE)
+
+sc2tree_df_annp2 <- sc2tree_df_annp1 %>% separate(id, into=c("batch","run","code"), sep="[_]", remove=FALSE)
+
+sc2tree_df_annp3 <- sc2tree_df_annp2 %>% mutate(wave=ifelse(as.Date(date)<as.Date("2020/08/01"),"first","second"))
+
+sc2tree_df_annp4 <- sc2tree_df_annp3 %>% mutate(posteriorsupport=ifelse(posterior > 0.5 & posterior < 0.8, "medium", ifelse(posterior >= 0.8, "high","low")))
+
+sc2tree_df_annp5 <-  sc2tree_df_annp4 %>% mutate(lineagemut=(fct_lump_min(sc2tree_df_annp4$lineage, 3, w = NULL, other_level = "Other")))
+
+sc2tree_df_annp6 <- sc2tree_df_annp5 %>% mutate(lineagemut2=(recode(lineagemut, B.1.1.130="Other", B.1.1.145="Other", B.1.1.39="Other", B.1.1.67="Other", B.1.134="Other", B.1.221="Other", B.1.236="Other", B.1.258="Other", B.1.258.3="Other", B.1.356="Other", B.1.438="Other", B="Other", B.1.9.5="Other")))
+
+# Add nextclade classification
+nextclade_classification <- read.table(file="nextcladeClass_386Rtree.csv", sep="\t", stringsAsFactor=F, header=TRUE)
+
+nextclade_classification_clades <- nextclade_classification$nextclade
+
+nextcladevec_nas <- rep(NA, length(sc2tree_df_annp6$branch.length)-length(nextclade_classification_clades))
+
+nextclade_classification_cladesandna <- c(nextclade_classification_clades,nextcladevec_nas)
+
+sc2tree_df_annp6$nextclade <- nextclade_classification_cladesandna
+
+sc2tree_df_ann <- sc2tree_df_annp6 %>% mutate(tnornot=(recode(batch, EPI="GISAID", Ph1="TN1", Ph2="TN1", Ph3="TN2", Ph4="TN2"))) %>% mutate(nextclademut=(recode(nextclade, "20H/501Y.V2"="Other", "20I/501Y.V1"="Other", "20J/501Y.V3"="Other", "19A"="Other", "19B"="Other")))
+
+# Remove intermediate datasets
+remove(sc2tree_tib)
+remove(sc2tree_df_annp1)
+remove(sc2tree_df_annp2)
+remove(sc2tree_df_annp3)
+remove(sc2tree_df_annp4)
+remove(sc2tree_df_annp5)
+remove(sc2tree_df_annp6)
+remove(nextclade_classification)
+remove(nextclade_classification_clades)
+remove(nextcladevec_nas)
+remove(nextclade_classification_cladesandna)
+remove(sc2tree_df)
+```
+
+# Main tree
+```{r}
+# Set colours
+color_waves2=c(TN1="red", TN2="blue", GISAID="black", medium="gray47", low="transparent", high="black")
+
+# Tree object
+sc2_tree_plot2 <- ggtree(sc2tree, mrsd="2021-01-25", aes(color=sc2tree_df_ann$tnornot))+theme_tree2()+theme(legend.position="right")+ggtitle("SARS-CoV-2 timetree")+scale_color_manual(values=color_waves2, na.value="#000000")+geom_nodepoint(aes(color=sc2tree_df_ann$posteriorsupport))
+```
+
+# Load Nextclade and Pangolin classification
+```{r}
+# Pangolin
+pangolineages_tab_rec2 <- read.table(file="pangolineages_ord_rec2.txt", sep="\t", stringsAsFactor=F)
+
+# Nextclade
+nextclade_tab_rec <- read.table(file="nextclade_ord_rec.txt", sep="\t", stringsAsFactor=F)
+```
+
+# Version_1 - Map Nextclade and Pangolin classifications on the tree
+```{r}
+annotated_tree2 <- gheatmap(sc2_tree_plot2, pangolineages_tab_rec2, offset=.11, width=.05, colnames=TRUE)+scale_fill_manual(breaks=c("B.1", "B.1.1", "B.1.1.1", "B.1.1.29", "B.1.160", "B.1.177", "B.1.1.305", "B.1.367", "Other"), values=c("#A6CEE3", "#2078B4", "#B2DF8A", "#359F2C", "#FB9A99", "#E31A1D", "#FDBF6F", "#FF7F01", "dark gray"), name="Lineage")
+
+annotated_tree2_fill <- annotated_tree2+new_scale_fill()
+
+annotated_tree_nclade2 <- gheatmap(annotated_tree2_fill, nextclade_tab_rec, offset=.03, width=.05, colnames=TRUE)+scale_fill_manual(breaks=c("20A", "20A.EU2", "20B", "20C", "20D", "20E (EU1)", "Other"), values=c("#80C97F", "#BEAED4", "#FDC086", "#FFFF9A", "#386CB0", "#F0007F", "dark gray"), name="Clade")+guides(color = guide_legend(order=1), fill= guide_legend(order=2))
+```
+
+# Version_2 - Map only Pangolin classification
+```{r}
+annotated_tree_onlypango <- gheatmap(sc2_tree_plot2, pangolineages_tab_rec2, offset=.01, width=.1, colnames=TRUE)+scale_fill_manual(breaks=c("B.1", "B.1.1", "B.1.1.1", "B.1.1.29", "B.1.160", "B.1.177", "B.1.1.305", "B.1.367", "Other"), values=c("#A6CEE3", "#2078B4", "#B2DF8A", "#359F2C", "#FB9A99", "#E31A1D", "#FDBF6F", "#FF7F01", "#CAB2D6"), name="Lineage")
+```
+
+# Export figures
+```{r}
+# Version_1
+ggsave("figure_tree_article_2.pdf", plot=annotated_tree_nclade2, height=8.5 ,width=7)
+
+# Version_2
+ggsave("figure_tree_article_only_pangolin.pdf", plot=annotated_tree_onlypango, height=8.5, width=7)
